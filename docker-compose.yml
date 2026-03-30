@@ -1,0 +1,26 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: kosdr_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: kosdr
+      POSTGRES_PASSWORD: kosdr_dev
+      POSTGRES_DB: kosdr
+    ports:
+      - "5441:5432"
+    volumes:
+      - kosdr_postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    container_name: kosdr_redis
+    restart: unless-stopped
+    ports:
+      - "6383:6379"
+    volumes:
+      - kosdr_redis_data:/data
+
+volumes:
+  kosdr_postgres_data:
+  kosdr_redis_data:

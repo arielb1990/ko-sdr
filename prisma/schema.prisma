@@ -1,0 +1,502 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma/"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Auth & Organization ─────────────────────────────
+
+enum UserRole {
+  ADMIN
+  CCO
+  SDR_MANAGER
+  VIEWER
+}
+
+model Organization {
+  id   String @id @default(cuid())
+  name String
+  slug String @unique
+
+  // API Keys (encrypted)
+  apolloApiKey       String?
+  hubspotAccessToken String?
+  icommApiKey        String?
+  icommSmtpHost      String?
+  icommSmtpPort      String?
+  icommSmtpUser      String?
+  icommSmtpPass      String?
+  anthropicApiKey    String?
+  emailDomain        String?
+
+  // Approval settings
+  requireLeadApproval    Boolean @default(true)
+  requireMessageApproval Boolean @default(true)
+  autoApproveThreshold   Int?    // Score >= this → auto-approve (null = disabled)
+
+  users           User[]
+  icpConfigs      IcpConfig[]
+  leads           Lead[]
+  companies       Company[]
+  sequences       Sequence[]
+  exclusions      Exclusion[]
+  discoveryRuns   DiscoveryRun[]
+  hubspotSyncLogs HubspotSyncLog[]
+  knowledgeItems  KnowledgeItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model User {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  name           String?
+  image          String?
+  hashedPassword String?
+  emailVerified  DateTime?
+  role           UserRole @default(VIEWER)
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  accounts        Account[]
+  sessions        Session[]
+  approvalActions ApprovalAction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── ICP Configuration ───────────────────────────────
+
+model IcpConfig {
+  id             String       @id @default(cuid())
+  name           String
+  isActive       Boolean      @default(true)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  countries      String[]
+  employeeRanges String[]
+  jobTitles      String[]
+  industries     String[]
+  keywords       String[]
+  excludeKeywords String[]
+
+  scoringCriteria Json?
+
+  discoveryRuns DiscoveryRun[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Companies & Leads ───────────────────────────────
+
+enum CompanySource {
+  APOLLO
+  HUBSPOT
+  MANUAL
+}
+
+model Company {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  apolloId    String? @unique
+  hubspotId   String? @unique
+  domain      String
+  name        String
+
+  industry      String?
+  employeeCount Int?
+  annualRevenue String?
+  country       String?
+  city          String?
+  website       String?
+  linkedinUrl   String?
+  description   String?
+  technologies  String[]
+
+  aiBrief        String?  @db.Text
+  aiPainPoints   String[]
+  aiServiceMatch String[]
+  aiResearchedAt DateTime?
+  source         CompanySource @default(APOLLO)
+
+  leads Lead[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, domain])
+}
+
+enum LeadStatus {
+  DISCOVERED
+  RESEARCHING
+  RESEARCHED
+  SCORING
+  QUALIFIED
+  DISQUALIFIED
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  IN_SEQUENCE
+  REPLIED
+  INTERESTED
+  NOT_INTERESTED
+  MEETING_BOOKED
+  PUSHED_TO_CRM
+}
+
+model Lead {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  apolloId         String? @unique
+  hubspotContactId String?
+  email            String
+  firstName        String
+  lastName         String
+  linkedinUrl      String?
+
+  jobTitle   String?
+  seniority  String?
+  department String?
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+
+  aiRelevanceScore  Float?
+  aiScoreReasoning  String? @db.Text
+  aiPersonalization String? @db.Text
+
+  status         LeadStatus @default(DISCOVERED)
+  discoveryRunId String?
+  discoveryRun   DiscoveryRun? @relation(fields: [discoveryRunId], references: [id])
+
+  outreachActivities  OutreachActivity[]
+  approvalItems       ApprovalItem[]
+  sequenceEnrollments SequenceEnrollment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, email])
+}
+
+// ─── Discovery Runs ──────────────────────────────────
+
+enum DiscoveryRunStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+model DiscoveryRun {
+  id             String              @id @default(cuid())
+  organizationId String
+  organization   Organization        @relation(fields: [organizationId], references: [id])
+  icpConfigId    String
+  icpConfig      IcpConfig           @relation(fields: [icpConfigId], references: [id])
+  status         DiscoveryRunStatus  @default(PENDING)
+
+  totalFound        Int @default(0)
+  totalNew          Int @default(0)
+  totalExcluded     Int @default(0)
+  apolloCreditsUsed Int @default(0)
+
+  leads Lead[]
+  error String?
+
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+}
+
+// ─── Sequences & Outreach ────────────────────────────
+
+enum SequenceChannel {
+  EMAIL
+  LINKEDIN
+}
+
+model Sequence {
+  id             String          @id @default(cuid())
+  organizationId String
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+  name           String
+  description    String?
+  channel        SequenceChannel @default(EMAIL)
+  isActive       Boolean         @default(true)
+
+  serviceContext String? @db.Text
+  toneGuide      String? @db.Text
+
+  steps       SequenceStep[]
+  enrollments SequenceEnrollment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SequenceStep {
+  id         String   @id @default(cuid())
+  sequenceId String
+  sequence   Sequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  order      Int
+  delayDays  Int
+
+  subjectTemplate String?
+  bodyTemplate    String  @db.Text
+  stepType        String  @default("email")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([sequenceId, order])
+}
+
+model SequenceEnrollment {
+  id          String   @id @default(cuid())
+  leadId      String
+  lead        Lead     @relation(fields: [leadId], references: [id])
+  sequenceId  String
+  sequence    Sequence @relation(fields: [sequenceId], references: [id])
+  currentStep Int      @default(0)
+  isActive    Boolean  @default(true)
+  pausedAt    DateTime?
+  completedAt DateTime?
+
+  activities OutreachActivity[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([leadId, sequenceId])
+}
+
+// ─── Outreach Activities ─────────────────────────────
+
+enum ActivityType {
+  EMAIL_SENT
+  EMAIL_OPENED
+  EMAIL_CLICKED
+  EMAIL_REPLIED
+  EMAIL_BOUNCED
+  EMAIL_UNSUBSCRIBED
+  LINKEDIN_CONNECT_SENT
+  LINKEDIN_CONNECT_ACCEPTED
+  LINKEDIN_MESSAGE_SENT
+  LINKEDIN_MESSAGE_REPLIED
+}
+
+enum ReplyClassification {
+  INTERESTED
+  NOT_NOW
+  NOT_INTERESTED
+  OUT_OF_OFFICE
+  BOUNCE
+  UNSUBSCRIBE
+  OTHER
+}
+
+model OutreachActivity {
+  id           String              @id @default(cuid())
+  leadId       String
+  lead         Lead                @relation(fields: [leadId], references: [id])
+  enrollmentId String?
+  enrollment   SequenceEnrollment? @relation(fields: [enrollmentId], references: [id])
+  type         ActivityType
+  channel      SequenceChannel     @default(EMAIL)
+
+  emailMessageId String?
+  subject        String?
+  body           String? @db.Text
+  fromEmail      String?
+  toEmail        String?
+
+  replyBody           String?              @db.Text
+  replyClassification ReplyClassification?
+  replyClassifiedAt   DateTime?
+
+  metadata Json?
+
+  createdAt DateTime @default(now())
+}
+
+// ─── Approval Queue ──────────────────────────────────
+
+enum ApprovalItemType {
+  LEAD_QUALIFICATION
+  OUTREACH_MESSAGE
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  FLAGGED
+}
+
+model ApprovalItem {
+  id     String           @id @default(cuid())
+  type   ApprovalItemType
+  status ApprovalStatus   @default(PENDING)
+  leadId String
+  lead   Lead             @relation(fields: [leadId], references: [id])
+
+  proposedSubject String?
+  proposedBody    String? @db.Text
+  sequenceStepId  String?
+
+  aiBrief      String? @db.Text
+  aiConfidence Float?
+
+  actions    ApprovalAction[]
+  resolvedAt DateTime?
+  note       String?
+  batchId    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ApprovalAction {
+  id             String       @id @default(cuid())
+  approvalItemId String
+  approvalItem   ApprovalItem @relation(fields: [approvalItemId], references: [id])
+  userId         String
+  user           User         @relation(fields: [userId], references: [id])
+  action         ApprovalStatus
+  note           String?
+
+  createdAt DateTime @default(now())
+}
+
+// ─── Exclusions ──────────────────────────────────────
+
+enum ExclusionType {
+  DOMAIN
+  EMAIL
+  COMPANY_NAME
+  HUBSPOT_CLIENT
+  HUBSPOT_CONTACT
+}
+
+model Exclusion {
+  id             String        @id @default(cuid())
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+  type           ExclusionType
+  value          String
+  reason         String?
+  source         String        @default("manual")
+  hubspotId      String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([organizationId, type, value])
+  @@index([organizationId, value])
+}
+
+// ─── Knowledge Base ──────────────────────────────────
+
+enum KnowledgeItemType {
+  CASE_STUDY
+  SERVICE
+  VERTICAL
+  TESTIMONIAL
+}
+
+model KnowledgeItem {
+  id             String            @id @default(cuid())
+  organizationId String
+  organization   Organization      @relation(fields: [organizationId], references: [id])
+  type           KnowledgeItemType
+  title          String
+  description    String            @db.Text
+  industry       String?
+  service        String?
+  metrics        String?
+  country        String?
+  url            String?
+  source         String            @default("manual")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─── HubSpot Sync ────────────────────────────────────
+
+enum SyncDirection {
+  PUSH
+  PULL
+}
+
+enum SyncStatus {
+  SUCCESS
+  FAILED
+  PARTIAL
+}
+
+model HubspotSyncLog {
+  id               String        @id @default(cuid())
+  organizationId   String
+  organization     Organization  @relation(fields: [organizationId], references: [id])
+  direction        SyncDirection
+  status           SyncStatus
+  recordType       String
+  recordsProcessed Int           @default(0)
+  recordsFailed    Int           @default(0)
+  error            String?
+  details          Json?
+
+  startedAt   DateTime
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+}

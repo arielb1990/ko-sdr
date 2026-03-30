@@ -1,36 +1,154 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# KO-SDR — SDR Autónomo con IA
 
-## Getting Started
+Plataforma de prospección B2B automatizada para Known Online. Descubre leads en Apollo.io, los investiga con Claude, los califica, obtiene aprobación del CCO, y envía emails personalizados via ICOMM. Las respuestas se clasifican automáticamente y los leads interesados se sincronizan con HubSpot.
 
-First, run the development server:
+## Stack
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- Next.js 16 + React 19 + Tailwind CSS 4
+- Prisma v7 + PostgreSQL 16
+- Redis 7 + BullMQ (8 workers)
+- Anthropic SDK (Claude Sonnet 4 / Haiku)
+- Apollo.io, ICOMM (SMTP), HubSpot
+
+## Pipeline
+
+```
+Apollo Discovery → AI Research → AI Scoring → Cola de Aprobación
+    → AI Copywriter → Email Outreach (ICOMM) → AI Clasificación de respuestas
+    → HubSpot Sync (Contact + Deal)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Setup local
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 1. Clonar y dependencias
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+git clone <repo-url> ko-sdr
+cd ko-sdr
+npm install
+```
 
-## Learn More
+### 2. Levantar infraestructura
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+docker compose up -d  # PostgreSQL (5441) + Redis (6383)
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 3. Configurar variables de entorno
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+cp .env.example .env
+# Editar .env con las API keys reales
+```
 
-## Deploy on Vercel
+### 4. Base de datos
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npx prisma generate
+npx prisma migrate dev
+npm run db:seed
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### 5. Ejecutar
+
+```bash
+# Terminal 1: app
+npm run dev
+
+# Terminal 2: workers
+npm run worker
+```
+
+### 6. Acceder
+
+- App: http://localhost:3000
+- Login: `admin@knownonline.com` / `admin123`
+
+## Variables de entorno
+
+| Variable | Descripción |
+|----------|-------------|
+| `DATABASE_URL` | PostgreSQL connection string |
+| `REDIS_URL` | Redis connection string |
+| `AUTH_SECRET` | Secret para Auth.js (generar random) |
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth secret |
+| `APOLLO_API_KEY` | Apollo.io API key |
+| `HUBSPOT_ACCESS_TOKEN` | HubSpot private app token |
+| `ICOMM_SMTP_HOST` | ICOMM SMTP host |
+| `ICOMM_SMTP_PORT` | ICOMM SMTP port (default 587) |
+| `ICOMM_SMTP_USER` | ICOMM SMTP usuario |
+| `ICOMM_SMTP_PASS` | ICOMM SMTP contraseña |
+| `ANTHROPIC_API_KEY` | Claude API key |
+| `EMAIL_DOMAIN` | Dominio para cold email |
+
+Las API keys también se configuran desde la UI en `/settings`.
+
+## Comandos
+
+| Comando | Descripción |
+|---------|-------------|
+| `npm run dev` | Inicia Next.js en desarrollo |
+| `npm run worker` | Inicia los 8 workers de BullMQ |
+| `npm run build` | Build de producción |
+| `npm run db:migrate` | Corre migraciones de Prisma |
+| `npm run db:seed` | Seed de datos iniciales |
+| `npm run db:studio` | Abre Prisma Studio |
+| `npm test` | Corre tests (vitest) |
+| `npm run test:watch` | Tests en modo watch |
+
+## Deploy (Dokploy)
+
+1. Crear proyecto en Dokploy → Docker Compose
+2. Usar `docker-compose.prod.yml`
+3. Cargar variables de entorno en el panel
+4. Asignar dominio + SSL
+5. Deploy
+
+El compose de producción levanta 4 servicios: app, workers, db, redis.
+
+## Arquitectura
+
+### Páginas
+
+| Ruta | Descripción |
+|------|-------------|
+| `/` | Dashboard con pipeline funnel y stats |
+| `/leads` | Lista de leads con búsqueda y filtros |
+| `/leads/[id]` | Detalle del lead (contacto, empresa, IA, score) |
+| `/approval` | Cola de aprobación del CCO (individual + batch) |
+| `/sequences` | Builder de secuencias de email multi-step |
+| `/exclusions` | Gestión de exclusiones (dominio, email, empresa) |
+| `/icp` | Configuración de ICP + trigger de discovery |
+| `/knowledge` | Knowledge base (casos de éxito, servicios) |
+| `/analytics` | Funnel, outreach stats, performance por secuencia/ICP |
+| `/settings` | API keys, ICOMM, aprobación, modo autónomo |
+
+### Workers (BullMQ)
+
+| Worker | Función |
+|--------|---------|
+| `discovery` | Busca leads en Apollo.io por ICP |
+| `research` | Investiga empresas con Claude (scrape web + IA) |
+| `scoring` | Califica leads 0-100 contra ICP |
+| `approval-prep` | Prepara items para cola de aprobación |
+| `copywriter` | Genera emails personalizados con IA |
+| `outreach` | Envía emails via ICOMM SMTP |
+| `response-classification` | Clasifica replies con IA |
+| `hubspot-sync` | Sync bidireccional con HubSpot |
+
+### Webhooks
+
+| Endpoint | Función |
+|----------|---------|
+| `POST /api/webhooks/icomm` | Eventos de email (open, click, reply, bounce) |
+| `POST /api/webhooks/hubspot` | Cambios de contactos en HubSpot |
+
+## Roles
+
+| Rol | Permisos |
+|-----|----------|
+| `ADMIN` | Acceso total + settings |
+| `CCO` | Aprobación + settings + todo lo demás |
+| `SDR_MANAGER` | Todo excepto settings sensibles |
+| `VIEWER` | Solo lectura |
