@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, ShieldBan } from "lucide-react";
+import { showToast } from "@/components/ui/toast";
 
 type Lead = {
   id: string;
@@ -72,6 +73,41 @@ export default function LeadsPage() {
     loadLeads();
   }, [loadLeads]);
 
+  async function excludeEmail(email: string) {
+    await Promise.all([
+      fetch("/api/exclusions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "EMAIL", value: email, reason: "Excluido desde leads" }),
+      }),
+      fetch("/api/leads/exclude", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "email", value: email }),
+      }),
+    ]);
+    setLeads((prev) => prev.filter((l) => l.email !== email));
+    showToast(`Email ${email} excluido`, "success");
+  }
+
+  async function excludeDomain(domain: string) {
+    const count = leads.filter((l) => l.company.domain === domain).length;
+    await Promise.all([
+      fetch("/api/exclusions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "DOMAIN", value: domain, reason: "Excluido desde leads" }),
+      }),
+      fetch("/api/leads/exclude", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "domain", value: domain }),
+      }),
+    ]);
+    setLeads((prev) => prev.filter((l) => l.company.domain !== domain));
+    showToast(`Dominio ${domain} excluido (${count} leads removidos)`, "success");
+  }
+
   return (
     <div>
       <h1 className="text-2xl font-bold text-foreground">Leads</h1>
@@ -126,6 +162,7 @@ export default function LeadsPage() {
                 <th className="px-4 py-3 font-medium text-muted-foreground">País</th>
                 <th className="px-4 py-3 font-medium text-muted-foreground">Score</th>
                 <th className="px-4 py-3 font-medium text-muted-foreground">Estado</th>
+                <th className="px-4 py-3 w-10"></th>
               </tr>
             </thead>
             <tbody>
@@ -181,6 +218,26 @@ export default function LeadsPage() {
                       >
                         {status.label}
                       </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => excludeEmail(lead.email)}
+                          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-red-50 hover:text-red-600"
+                          title={`Excluir email: ${lead.email}`}
+                        >
+                          <ShieldBan className="h-3 w-3" />
+                          email
+                        </button>
+                        <button
+                          onClick={() => excludeDomain(lead.company.domain)}
+                          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-red-50 hover:text-red-600"
+                          title={`Excluir dominio: ${lead.company.domain}`}
+                        >
+                          <ShieldBan className="h-3 w-3" />
+                          dominio
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );

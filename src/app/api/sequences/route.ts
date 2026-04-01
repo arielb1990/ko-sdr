@@ -37,9 +37,10 @@ export async function POST(request: Request) {
       toneGuide: body.toneGuide || null,
       steps: {
         create: (body.steps || []).map(
-          (step: { subjectTemplate?: string; bodyTemplate: string; delayDays: number }, i: number) => ({
+          (step: { stepType?: string; subjectTemplate?: string; bodyTemplate: string; delayDays: number }, i: number) => ({
             order: i + 1,
             delayDays: step.delayDays || 0,
+            stepType: step.stepType || "email",
             subjectTemplate: step.subjectTemplate || null,
             bodyTemplate: step.bodyTemplate,
           })

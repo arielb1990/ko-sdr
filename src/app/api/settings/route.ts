@@ -21,6 +21,13 @@ export async function GET() {
       requireLeadApproval: true,
       requireMessageApproval: true,
       autoApproveThreshold: true,
+      maxLeadsPerRun: true,
+      phantombusterApiKey: true,
+      phantombusterConnectAgentId: true,
+      phantombusterMessageAgentId: true,
+      gmailAccounts: {
+        select: { id: true, email: true, isActive: true },
+      },
     },
   });
 
@@ -33,6 +40,7 @@ export async function GET() {
     hubspotAccessToken: maskSecret(org.hubspotAccessToken),
     icommApiKey: maskSecret(org.icommApiKey),
     icommSmtpPass: maskSecret(org.icommSmtpPass),
+    phantombusterApiKey: maskSecret(org.phantombusterApiKey),
     anthropicApiKey: maskSecret(org.anthropicApiKey),
   };
 
@@ -63,6 +71,10 @@ export async function PUT(request: Request) {
     "requireLeadApproval",
     "requireMessageApproval",
     "autoApproveThreshold",
+    "maxLeadsPerRun",
+    "phantombusterApiKey",
+    "phantombusterConnectAgentId",
+    "phantombusterMessageAgentId",
   ] as const;
 
   for (const field of fields) {

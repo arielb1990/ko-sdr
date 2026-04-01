@@ -6,6 +6,8 @@ import { createCopywriterWorker } from "./copywriter.worker";
 import { createOutreachWorker } from "./outreach.worker";
 import { createResponseWorker } from "./response.worker";
 import { createHubspotSyncWorker } from "./hubspot-sync.worker";
+import { createGmailPollerWorker } from "./gmail-poller.worker";
+import { gmailPollerQueue } from "../lib/queue";
 
 console.log("[workers] Starting KO-SDR workers...");
 
@@ -18,9 +20,17 @@ const workers = [
   createOutreachWorker(),
   createResponseWorker(),
   createHubspotSyncWorker(),
+  createGmailPollerWorker(),
 ];
 
-console.log("[workers] All 8 workers started");
+// Schedule Gmail polling every 5 minutes
+gmailPollerQueue.upsertJobScheduler(
+  "gmail-poll-recurring",
+  { every: 5 * 60 * 1000 },
+  { data: {} }
+);
+
+console.log("[workers] All 9 workers started (Gmail polling every 5 min)");
 
 async function shutdown() {
   console.log("[workers] Shutting down...");

@@ -19,6 +19,7 @@ describe("ApolloClient", () => {
         employeeRanges: [],
         jobTitles: [],
         industries: [],
+        excludeIndustries: [],
         keywords: [],
       });
 
@@ -35,6 +36,7 @@ describe("ApolloClient", () => {
         employeeRanges: ["51-200", "201-500"],
         jobTitles: [],
         industries: [],
+        excludeIndustries: [],
         keywords: [],
       });
 
@@ -50,6 +52,7 @@ describe("ApolloClient", () => {
         employeeRanges: [],
         jobTitles: ["CTO", "CMO", "Director de Ecommerce"],
         industries: [],
+        excludeIndustries: [],
         keywords: [],
       });
 
@@ -60,16 +63,17 @@ describe("ApolloClient", () => {
       ]);
     });
 
-    it("joins keywords with space", () => {
+    it("passes keywords as organization keyword tags", () => {
       const filters = client.icpToFilters({
         countries: [],
         employeeRanges: [],
         jobTitles: [],
         industries: [],
+        excludeIndustries: [],
         keywords: ["ecommerce", "transformación digital"],
       });
 
-      expect(filters.q_keywords).toBe("ecommerce transformación digital");
+      expect(filters.q_organization_keyword_tags).toEqual(["ecommerce", "transformación digital"]);
     });
 
     it("omits empty arrays from filters", () => {
@@ -78,6 +82,7 @@ describe("ApolloClient", () => {
         employeeRanges: [],
         jobTitles: [],
         industries: [],
+        excludeIndustries: [],
         keywords: [],
       });
 
@@ -93,6 +98,7 @@ describe("ApolloClient", () => {
         employeeRanges: [],
         jobTitles: [],
         industries: [],
+        excludeIndustries: [],
         keywords: [],
       });
 

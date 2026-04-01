@@ -9,3 +9,4 @@ export const copywriterQueue = new Queue("copywriter", { connection: redis });
 export const outreachQueue = new Queue("outreach", { connection: redis });
 export const responseClassificationQueue = new Queue("response-classification", { connection: redis });
 export const hubspotSyncQueue = new Queue("hubspot-sync", { connection: redis });
+export const gmailPollerQueue = new Queue("gmail-poller", { connection: redis });

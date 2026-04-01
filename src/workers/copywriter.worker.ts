@@ -94,6 +94,7 @@ async function processCopywriterJob(job: Job<CopywriterJobData>) {
       serviceContext: enrollment.sequence.serviceContext,
       toneGuide: enrollment.sequence.toneGuide,
       stepNumber: stepOrder,
+      stepType: step.stepType,
       stepTemplate: step.bodyTemplate,
       subjectTemplate: step.subjectTemplate,
       previousStepsSent: previousActivities.map((a) => a.subject || ""),
@@ -117,7 +118,7 @@ async function processCopywriterJob(job: Job<CopywriterJobData>) {
         proposedSubject: email.subject,
         proposedBody: email.body,
         sequenceStepId: step.id,
-        aiBrief: `Email ${stepOrder} para ${lead.firstName} ${lead.lastName} @ ${company.name}`,
+        aiBrief: `${step.stepType === "email" ? "Email" : "LinkedIn"} paso ${stepOrder} para ${lead.firstName} ${lead.lastName} @ ${company.name}`,
         aiConfidence: lead.aiRelevanceScore,
       },
     });
@@ -132,8 +133,9 @@ async function processCopywriterJob(job: Job<CopywriterJobData>) {
       subject: email.subject,
       body: email.body,
       stepOrder,
+      stepType: step.stepType,
     });
-    job.log("Email generated, queued for sending");
+    job.log(`${step.stepType} generated, queued for sending`);
   }
 
   return email;

@@ -37,13 +37,15 @@ async function processDiscoveryJob(job: Job<DiscoveryJobData>) {
 
     if (!icp) throw new Error(`ICP config ${icpConfigId} not found`);
 
-    // Load org API key
+    // Load org settings
     const org = await prisma.organization.findUnique({
       where: { id: organizationId },
-      select: { apolloApiKey: true },
+      select: { apolloApiKey: true, maxLeadsPerRun: true },
     });
 
     if (!org?.apolloApiKey) throw new Error("Apollo API key not configured");
+
+    const maxLeads = org.maxLeadsPerRun || 10;
 
     // Load exclusions
     const exclusions = await prisma.exclusion.findMany({
@@ -82,6 +84,7 @@ async function processDiscoveryJob(job: Job<DiscoveryJobData>) {
       employeeRanges: icp.employeeRanges,
       jobTitles: icp.jobTitles,
       industries: icp.industries,
+      excludeIndustries: icp.excludeIndustries,
       keywords: icp.keywords,
     });
 
@@ -89,12 +92,17 @@ async function processDiscoveryJob(job: Job<DiscoveryJobData>) {
 
     const { people, totalFound } = await apollo.searchAllPages(filters, maxPages);
 
-    job.log(`Found ${totalFound} total, fetched ${people.length} people`);
+    job.log(`Found ${totalFound} total, fetched ${people.length} people (limit: ${maxLeads})`);
 
     let totalNew = 0;
     let totalExcluded = 0;
 
     for (const person of people) {
+      // Stop if we've reached the configured limit
+      if (totalNew >= maxLeads) {
+        job.log(`Reached max leads limit (${maxLeads}), stopping`);
+        break;
+      }
       const excluded = isExcluded(
         person,
         excludedDomains,
@@ -110,14 +118,19 @@ async function processDiscoveryJob(job: Job<DiscoveryJobData>) {
       }
 
       try {
-        // Enrich to get email
+        // Always enrich to get full data (search API returns partial/obfuscated data)
+        let enrichedPerson = person;
         let email = person.email;
-        if (!email && person.id) {
+
+        if (person.id) {
           try {
             const enriched = await apollo.enrichPerson(person.id);
-            email = enriched.person.email;
+            if (enriched.person) {
+              enrichedPerson = { ...person, ...enriched.person };
+              email = enriched.person.email || email;
+            }
           } catch {
-            // Skip if enrichment fails
+            // Use partial data if enrichment fails
           }
         }
 
@@ -138,10 +151,11 @@ async function processDiscoveryJob(job: Job<DiscoveryJobData>) {
           continue;
         }
 
-        // Create or find company
+        // Use enriched data for company
+        const orgData = enrichedPerson.organization;
         const companyDomain =
-          person.organization?.primary_domain ||
-          person.organization?.website_url?.replace(/^https?:\/\//, "").replace(/\/.*/, "") ||
+          orgData?.primary_domain ||
+          orgData?.website_url?.replace(/^https?:\/\//, "").replace(/\/.*/, "") ||
           domain;
 
         const company = await prisma.company.upsert({
@@ -153,39 +167,38 @@ async function processDiscoveryJob(job: Job<DiscoveryJobData>) {
           },
           create: {
             organizationId,
-            apolloId: person.organization?.id || null,
+            apolloId: orgData?.id || null,
             domain: companyDomain,
-            name: person.organization?.name || companyDomain,
-            industry: person.organization?.industry || null,
-            employeeCount: person.organization?.estimated_num_employees || null,
-            annualRevenue: person.organization?.annual_revenue_printed || null,
-            country: person.organization?.country || null,
-            city: person.organization?.city || null,
-            website: person.organization?.website_url || null,
-            linkedinUrl: person.organization?.linkedin_url || null,
-            description: person.organization?.short_description || null,
-            technologies: person.organization?.technologies || [],
+            name: orgData?.name || companyDomain,
+            industry: orgData?.industry || null,
+            employeeCount: orgData?.estimated_num_employees || null,
+            annualRevenue: orgData?.annual_revenue_printed || null,
+            country: orgData?.country || null,
+            city: orgData?.city || null,
+            website: orgData?.website_url || null,
+            linkedinUrl: orgData?.linkedin_url || null,
+            description: orgData?.short_description || null,
+            technologies: orgData?.technologies || [],
             source: "APOLLO",
           },
           update: {
-            // Update with latest data from Apollo
-            industry: person.organization?.industry || undefined,
-            employeeCount: person.organization?.estimated_num_employees || undefined,
+            industry: orgData?.industry || undefined,
+            employeeCount: orgData?.estimated_num_employees || undefined,
           },
         });
 
-        // Create lead
+        // Create lead (use enriched data which has full names)
         const newLead = await prisma.lead.create({
           data: {
             organizationId,
-            apolloId: person.id,
+            apolloId: enrichedPerson.id,
             email: email.toLowerCase(),
-            firstName: person.first_name || "",
-            lastName: person.last_name || "",
-            jobTitle: person.title || null,
-            seniority: person.seniority || null,
-            department: person.departments?.[0] || null,
-            linkedinUrl: person.linkedin_url || null,
+            firstName: enrichedPerson.first_name || "",
+            lastName: enrichedPerson.last_name || "",
+            jobTitle: enrichedPerson.title || null,
+            seniority: enrichedPerson.seniority || null,
+            department: enrichedPerson.departments?.[0] || null,
+            linkedinUrl: enrichedPerson.linkedin_url || null,
             companyId: company.id,
             status: "DISCOVERED",
             discoveryRunId,

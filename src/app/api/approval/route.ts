@@ -16,7 +16,15 @@ export async function GET(request: Request) {
     },
     include: {
       lead: {
-        include: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          jobTitle: true,
+          linkedinUrl: true,
+          aiRelevanceScore: true,
+          aiScoreReasoning: true,
           company: {
             select: {
               name: true,

@@ -58,10 +58,11 @@ export async function PUT(
     await prisma.sequenceStep.deleteMany({ where: { sequenceId: id } });
     await prisma.sequenceStep.createMany({
       data: body.steps.map(
-        (step: { subjectTemplate?: string; bodyTemplate: string; delayDays: number }, i: number) => ({
+        (step: { stepType?: string; subjectTemplate?: string; bodyTemplate: string; delayDays: number }, i: number) => ({
           sequenceId: id,
           order: i + 1,
           delayDays: step.delayDays || 0,
+          stepType: step.stepType || "email",
           subjectTemplate: step.subjectTemplate || null,
           bodyTemplate: step.bodyTemplate,
         })

@@ -1,4 +1,5 @@
 import { Sidebar } from "@/components/shared/sidebar";
+import { ToastContainer } from "@/components/ui/toast";
 
 export default function DashboardLayout({
   children,
@@ -11,6 +12,7 @@ export default function DashboardLayout({
       <main className="flex-1 overflow-auto bg-muted">
         <div className="p-6">{children}</div>
       </main>
+      <ToastContainer />
     </div>
   );
 }

@@ -25,6 +25,7 @@ type ApprovalItem = {
     jobTitle: string | null;
     linkedinUrl: string | null;
     aiRelevanceScore: number | null;
+    aiScoreReasoning: string | null;
     company: {
       name: string;
       domain: string;
@@ -307,12 +308,25 @@ function ApprovalCard({
         </button>
       </div>
 
-      {/* Expanded brief */}
-      {isExpanded && item.aiBrief && (
-        <div className="border-t border-border px-4 py-3">
-          <div className="prose prose-sm max-w-none text-sm text-muted-foreground whitespace-pre-line">
-            {item.aiBrief}
-          </div>
+      {/* Expanded details */}
+      {isExpanded && (
+        <div className="border-t border-border px-4 py-3 space-y-3">
+          {/* Score reasoning */}
+          {lead.aiScoreReasoning && (
+            <div className="rounded bg-muted p-3">
+              <p className="text-xs font-medium text-foreground mb-1">
+                Por qué score {score != null ? Math.round(score) : "—"}:
+              </p>
+              <p className="text-sm text-muted-foreground">{lead.aiScoreReasoning}</p>
+            </div>
+          )}
+
+          {/* AI Brief */}
+          {item.aiBrief && (
+            <div className="text-sm text-muted-foreground whitespace-pre-line">
+              {item.aiBrief}
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Plus, Pencil, Trash2, Play } from "lucide-react";
+import { Modal } from "@/components/ui/modal";
+import { showToast } from "@/components/ui/toast";
 
 type IcpConfig = {
   id: string;
@@ -11,6 +14,7 @@ type IcpConfig = {
   employeeRanges: string[];
   jobTitles: string[];
   industries: string[];
+  excludeIndustries: string[];
   keywords: string[];
   excludeKeywords: string[];
 };
@@ -29,6 +33,43 @@ const COUNTRIES = [
 
 const EMPLOYEE_RANGES = ["11-50", "51-200", "201-500", "501-1000", "1001-5000", "5001+"];
 
+const INDUSTRIES = [
+  "Retail",
+  "Consumer Goods",
+  "Food & Beverages",
+  "Apparel & Fashion",
+  "Cosmetics",
+  "Automotive",
+  "Health, Wellness & Fitness",
+  "Pharmaceuticals",
+  "Hospital & Health Care",
+  "Financial Services",
+  "Banking",
+  "Insurance",
+  "Real Estate",
+  "Construction",
+  "Telecommunications",
+  "Information Technology & Services",
+  "Computer Software",
+  "Internet",
+  "Marketing & Advertising",
+  "Management Consulting",
+  "Education",
+  "E-Learning",
+  "Entertainment",
+  "Media Production",
+  "Hospitality",
+  "Restaurants",
+  "Airlines/Aviation",
+  "Logistics & Supply Chain",
+  "Import & Export",
+  "Mining & Metals",
+  "Oil & Energy",
+  "Agriculture",
+  "Government",
+  "Nonprofit",
+];
+
 const DEFAULT_JOB_TITLES = [
   "Director de Ecommerce",
   "Gerente de Marketing",
@@ -42,6 +83,7 @@ const DEFAULT_JOB_TITLES = [
 ];
 
 export default function IcpPage() {
+  const router = useRouter();
   const [configs, setConfigs] = useState<IcpConfig[]>([]);
   const [editing, setEditing] = useState<IcpConfig | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -65,57 +107,134 @@ export default function IcpPage() {
       employeeRanges: ["51-200", "201-500", "501-1000", "1001-5000"],
       jobTitles: [...DEFAULT_JOB_TITLES],
       industries: [],
+      excludeIndustries: [],
       keywords: ["ecommerce", "transformación digital"],
       excludeKeywords: [],
     });
     setShowForm(true);
   }
 
-  async function saveConfig(config: IcpConfig) {
-    const method = config.id ? "PUT" : "POST";
-    const url = config.id ? `/api/icp/${config.id}` : "/api/icp";
+  async function saveConfig(data: IcpConfig) {
+    const method = data.id ? "PUT" : "POST";
+    const url = data.id ? `/api/icp/${data.id}` : "/api/icp";
 
-    await fetch(url, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(config),
-    });
+    try {
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
 
-    setShowForm(false);
-    setEditing(null);
-    loadConfigs();
+      const responseText = await res.text();
+
+      if (!res.ok) {
+        let errorMsg = "Error al guardar";
+        try {
+          const err = JSON.parse(responseText);
+          errorMsg = err.error || errorMsg;
+        } catch {
+          errorMsg = `Error ${res.status}: ${responseText.slice(0, 100)}`;
+        }
+        showToast(errorMsg, "error");
+        return;
+      }
+
+      showToast("ICP guardado correctamente", "success");
+      setShowForm(false);
+      setEditing(null);
+      await loadConfigs();
+    } catch (err) {
+      showToast(`Error de conexión: ${err}`, "error");
+    }
   }
 
-  async function deleteConfig(id: string) {
-    if (!confirm("¿Eliminar esta configuración de ICP?")) return;
-    await fetch(`/api/icp/${id}`, { method: "DELETE" });
-    loadConfigs();
-  }
-
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [discoveryTarget, setDiscoveryTarget] = useState<string | null>(null);
   const [runningDiscovery, setRunningDiscovery] = useState<string | null>(null);
 
-  async function runDiscovery(icpConfigId: string) {
-    if (!confirm("¿Ejecutar Discovery con este ICP? Se buscarán leads en Apollo.io.")) return;
-    setRunningDiscovery(icpConfigId);
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    await fetch(`/api/icp/${deleteTarget}`, { method: "DELETE" });
+    setDeleteTarget(null);
+    showToast("Configuración eliminada", "success");
+    loadConfigs();
+  }
+
+  async function confirmDiscovery() {
+    if (!discoveryTarget) return;
+    setRunningDiscovery(discoveryTarget);
+    setDiscoveryTarget(null);
     try {
       const res = await fetch("/api/discovery", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ icpConfigId }),
+        body: JSON.stringify({ icpConfigId: discoveryTarget }),
       });
       const data = await res.json();
       if (res.ok) {
-        alert(`Discovery iniciado (ID: ${data.id}). Revisá la pestaña de Leads para ver los resultados.`);
+        showToast("Discovery iniciado. Redirigiendo a Leads...", "success");
+        setTimeout(() => router.push("/leads"), 1000);
       } else {
-        alert(`Error: ${data.error}`);
+        showToast(data.error || "Error al ejecutar discovery", "error");
       }
     } catch {
-      alert("Error al ejecutar discovery");
+      showToast("Error al ejecutar discovery", "error");
     }
     setRunningDiscovery(null);
   }
 
   return (
+    <>
+    {/* Delete confirmation modal */}
+    <Modal
+      open={!!deleteTarget}
+      onClose={() => setDeleteTarget(null)}
+      title="Eliminar configuración"
+      actions={
+        <>
+          <button
+            onClick={() => setDeleteTarget(null)}
+            className="rounded border border-border px-4 py-2 text-sm hover:bg-muted"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={confirmDelete}
+            className="rounded bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+          >
+            Eliminar
+          </button>
+        </>
+      }
+    >
+      <p>¿Estás seguro de que querés eliminar esta configuración de ICP? Esta acción no se puede deshacer.</p>
+    </Modal>
+
+    {/* Discovery confirmation modal */}
+    <Modal
+      open={!!discoveryTarget}
+      onClose={() => setDiscoveryTarget(null)}
+      title="Ejecutar Discovery"
+      actions={
+        <>
+          <button
+            onClick={() => setDiscoveryTarget(null)}
+            className="rounded border border-border px-4 py-2 text-sm hover:bg-muted"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={confirmDiscovery}
+            className="rounded bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent/90"
+          >
+            Ejecutar
+          </button>
+        </>
+      }
+    >
+      <p>Se buscarán leads en Apollo.io con los filtros de este ICP. Cada lead enriquecido consume 1 crédito de Apollo.</p>
+      <p className="mt-2 text-xs">Podés configurar el límite de leads por run en Settings.</p>
+    </Modal>
     <div>
       <div className="flex items-center justify-between">
         <div>
@@ -137,6 +256,7 @@ export default function IcpPage() {
 
       {showForm && editing && (
         <IcpForm
+          key={editing.id || "new"}
           config={editing}
           onSave={saveConfig}
           onCancel={() => {
@@ -178,12 +298,18 @@ export default function IcpPage() {
                   <span>{config.countries.length} países</span>
                   <span>{config.employeeRanges.length} rangos de tamaño</span>
                   <span>{config.jobTitles.length} cargos</span>
+                  {config.industries.length > 0 && (
+                    <span>{config.industries.length} industrias</span>
+                  )}
+                  {(config.excludeIndustries?.length ?? 0) > 0 && (
+                    <span className="text-red-500">{config.excludeIndustries.length} excluidas</span>
+                  )}
                   <span>{config.keywords.length} keywords</span>
                 </div>
               </div>
               <div className="flex gap-1">
                 <button
-                  onClick={() => runDiscovery(config.id)}
+                  onClick={() => setDiscoveryTarget(config.id)}
                   disabled={runningDiscovery === config.id || !config.isActive}
                   className="rounded bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-50 flex items-center gap-1"
                   title="Ejecutar Discovery"
@@ -193,7 +319,7 @@ export default function IcpPage() {
                 </button>
                 <button
                   onClick={() => {
-                    setEditing(config);
+                    setEditing({ ...config, excludeIndustries: config.excludeIndustries || [] });
                     setShowForm(true);
                   }}
                   className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -201,7 +327,7 @@ export default function IcpPage() {
                   <Pencil className="h-4 w-4" />
                 </button>
                 <button
-                  onClick={() => deleteConfig(config.id)}
+                  onClick={() => setDeleteTarget(config.id)}
                   className="rounded p-1.5 text-muted-foreground hover:bg-red-50 hover:text-red-600"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -212,6 +338,7 @@ export default function IcpPage() {
         ))}
       </div>
     </div>
+    </>
   );
 }
 
@@ -301,12 +428,25 @@ function IcpForm({
         </div>
 
         <div>
-          <label className="block text-sm font-medium">Industrias</label>
-          <TagInput
-            tags={form.industries}
-            onChange={(tags) => setForm({ ...form, industries: tags })}
-            placeholder="Agregar industria..."
+          <label className="block text-sm font-medium mb-2">Incluir industrias (opcional)</label>
+          <IndustrySelect
+            selected={form.industries}
+            onChange={(v) => setForm({ ...form, industries: v })}
+            exclude={form.excludeIndustries}
           />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-2">Excluir industrias</label>
+          <IndustrySelect
+            selected={form.excludeIndustries}
+            onChange={(v) => setForm({ ...form, excludeIndustries: v })}
+            exclude={form.industries}
+            variant="exclude"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            Leads de estas industrias no aparecerán en los resultados.
+          </p>
         </div>
 
         <div>
@@ -397,6 +537,95 @@ function TagInput({
         className="block w-full max-w-md rounded border border-border px-3 py-2 text-sm focus:border-accent focus:outline-none"
         placeholder={placeholder}
       />
+    </div>
+  );
+}
+
+function IndustrySelect({
+  selected,
+  onChange,
+  exclude = [],
+  variant = "include",
+}: {
+  selected: string[];
+  onChange: (v: string[]) => void;
+  exclude?: string[];
+  variant?: "include" | "exclude";
+}) {
+  const [open, setOpen] = useState(false);
+  const safeSelected = selected || [];
+  const safeExclude = exclude || [];
+  const available = INDUSTRIES.filter(
+    (i) => !safeSelected.includes(i) && !safeExclude.includes(i)
+  );
+
+  function add(industry: string) {
+    onChange([...selected, industry]);
+  }
+
+  function remove(industry: string) {
+    onChange(selected.filter((i) => i !== industry));
+  }
+
+  const chipColor =
+    variant === "exclude"
+      ? "bg-red-100 text-red-700"
+      : "bg-accent/10 text-accent";
+
+  return (
+    <div>
+      <div className="flex flex-wrap gap-1.5 mb-2">
+        {selected.map((industry) => (
+          <span
+            key={industry}
+            className={`flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium ${chipColor}`}
+          >
+            {industry}
+            <button
+              onClick={() => remove(industry)}
+              className="opacity-60 hover:opacity-100"
+            >
+              &times;
+            </button>
+          </span>
+        ))}
+      </div>
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          className="w-full max-w-md rounded border border-border px-3 py-2 text-left text-sm text-muted-foreground hover:bg-muted"
+        >
+          {selected.length === 0
+            ? variant === "exclude"
+              ? "Seleccionar industrias a excluir..."
+              : "Seleccionar industrias..."
+            : `${selected.length} seleccionada${selected.length !== 1 ? "s" : ""}`}
+        </button>
+        {open && (
+          <div className="absolute z-10 mt-1 max-h-60 w-full max-w-md overflow-auto rounded border border-border bg-background shadow-lg">
+            {available.length === 0 ? (
+              <p className="p-3 text-xs text-muted-foreground">
+                No hay más industrias disponibles
+              </p>
+            ) : (
+              available.map((industry) => (
+                <button
+                  key={industry}
+                  type="button"
+                  onClick={() => {
+                    add(industry);
+                    setOpen(false);
+                  }}
+                  className="block w-full px-3 py-2 text-left text-sm hover:bg-muted"
+                >
+                  {industry}
+                </button>
+              ))
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

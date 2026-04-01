@@ -37,7 +37,16 @@ model Organization {
   requireMessageApproval Boolean @default(true)
   autoApproveThreshold   Int?    // Score >= this → auto-approve (null = disabled)
 
+  // Discovery limits
+  maxLeadsPerRun         Int     @default(10) // Max leads to enrich per discovery run
+
+  // PhantomBuster
+  phantombusterApiKey    String?
+  phantombusterConnectAgentId String? // LinkedIn Auto Connect phantom
+  phantombusterMessageAgentId String? // LinkedIn Message Sender phantom
+
   users           User[]
+  gmailAccounts   GmailAccount[]
   icpConfigs      IcpConfig[]
   leads           Lead[]
   companies       Company[]
@@ -116,12 +125,13 @@ model IcpConfig {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
 
-  countries      String[]
-  employeeRanges String[]
-  jobTitles      String[]
-  industries     String[]
-  keywords       String[]
-  excludeKeywords String[]
+  countries         String[]
+  employeeRanges    String[]
+  jobTitles         String[]
+  industries        String[]
+  excludeIndustries String[]
+  keywords          String[]
+  excludeKeywords   String[]
 
   scoringCriteria Json?
 
@@ -355,10 +365,15 @@ model OutreachActivity {
   channel      SequenceChannel     @default(EMAIL)
 
   emailMessageId String?
+  gmailThreadId  String?  // Gmail thread ID for reply tracking
+  gmailMessageId String?  // Gmail message ID
   subject        String?
   body           String? @db.Text
   fromEmail      String?
   toEmail        String?
+
+  // LinkedIn
+  linkedinNote   String? // Connection request note or message
 
   replyBody           String?              @db.Text
   replyClassification ReplyClassification?
@@ -367,6 +382,29 @@ model OutreachActivity {
   metadata Json?
 
   createdAt DateTime @default(now())
+
+  @@index([gmailThreadId])
+}
+
+// ─── Gmail Accounts ──────────────────────────────────
+
+model GmailAccount {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  email          String
+  accessToken    String       @db.Text
+  refreshToken   String       @db.Text
+  tokenExpiresAt DateTime
+  isActive       Boolean      @default(true)
+  dailySentCount Int          @default(0)
+  dailyResetAt   DateTime?
+  lastPolledAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, email])
 }
 
 // ─── Approval Queue ──────────────────────────────────

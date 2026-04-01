@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Plus, Trash2, Search } from "lucide-react";
+import { useEffect, useState, useRef } from "react";
+import { Plus, Trash2, Search, Upload } from "lucide-react";
+import { showToast } from "@/components/ui/toast";
 
 type Exclusion = {
   id: string;
@@ -26,6 +27,8 @@ export default function ExclusionsPage() {
   const [newType, setNewType] = useState("DOMAIN");
   const [newValue, setNewValue] = useState("");
   const [newReason, setNewReason] = useState("");
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     loadExclusions();
@@ -64,22 +67,66 @@ export default function ExclusionsPage() {
     loadExclusions();
   }
 
+  async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImporting(true);
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const res = await fetch("/api/exclusions/import", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast(`${data.imported} exclusiones importadas${data.skipped > 0 ? `, ${data.skipped} omitidas` : ""}`, "success");
+        loadExclusions();
+      } else {
+        showToast(data.error || "Error al importar", "error");
+      }
+    } catch {
+      showToast("Error al importar archivo", "error");
+    }
+    setImporting(false);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Exclusiones</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Dominios, emails y empresas excluidas del outreach.
+            {exclusions.length} exclusiones{filterType || search ? " (filtradas)" : ""} — Dominios, emails y empresas excluidas del outreach.
           </p>
         </div>
-        <button
-          onClick={() => setShowForm(true)}
-          className="flex items-center gap-2 rounded bg-foreground px-3 py-2 text-sm font-medium text-background hover:bg-foreground/90"
-        >
-          <Plus className="h-4 w-4" />
-          Agregar
-        </button>
+        <div className="flex gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            onChange={handleImport}
+            className="hidden"
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importing}
+            className="flex items-center gap-2 rounded border border-border px-3 py-2 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-50"
+          >
+            <Upload className="h-4 w-4" />
+            {importing ? "Importando..." : "Importar Excel"}
+          </button>
+          <button
+            onClick={() => setShowForm(true)}
+            className="flex items-center gap-2 rounded bg-foreground px-3 py-2 text-sm font-medium text-background hover:bg-foreground/90"
+          >
+            <Plus className="h-4 w-4" />
+            Agregar
+          </button>
+        </div>
       </div>
 
       {showForm && (

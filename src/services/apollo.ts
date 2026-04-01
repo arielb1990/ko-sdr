@@ -4,7 +4,9 @@ type ApolloSearchFilters = {
   person_titles?: string[];
   organization_locations?: string[];
   organization_num_employees_ranges?: string[];
-  q_keywords?: string;
+  organization_industry_tag_ids?: string[];
+  organization_not_industry_tag_ids?: string[];
+  q_organization_keyword_tags?: string[];
   page?: number;
   per_page?: number;
 };
@@ -38,7 +40,9 @@ type ApolloPerson = {
 
 type ApolloSearchResponse = {
   people: ApolloPerson[];
-  pagination: {
+  total_entries: number;
+  // Some Apollo plans return pagination object, some put total_entries at root
+  pagination?: {
     page: number;
     per_page: number;
     total_entries: number;
@@ -59,6 +63,7 @@ type IcpFilters = {
   employeeRanges: string[];
   jobTitles: string[];
   industries: string[];
+  excludeIndustries: string[];
   keywords: string[];
 };
 
@@ -152,8 +157,16 @@ export class ApolloClient {
         .filter(Boolean);
     }
 
+    if (icp.industries.length > 0) {
+      filters.organization_industry_tag_ids = icp.industries;
+    }
+
+    if (icp.excludeIndustries.length > 0) {
+      filters.organization_not_industry_tag_ids = icp.excludeIndustries;
+    }
+
     if (icp.keywords.length > 0) {
-      filters.q_keywords = icp.keywords.join(" ");
+      filters.q_organization_keyword_tags = icp.keywords;
     }
 
     return filters;
@@ -219,10 +232,18 @@ export class ApolloClient {
 
     for (let page = 1; page <= maxPages; page++) {
       const response = await this.searchPeople(filters, page, 100);
-      totalFound = response.pagination.total_entries;
-      allPeople.push(...response.people);
 
-      if (page >= response.pagination.total_pages) break;
+      // Apollo returns total_entries at root or inside pagination
+      totalFound =
+        response.pagination?.total_entries ?? response.total_entries ?? 0;
+
+      allPeople.push(...(response.people || []));
+
+      const totalPages =
+        response.pagination?.total_pages ??
+        Math.ceil(totalFound / 100);
+
+      if (page >= totalPages || (response.people || []).length === 0) break;
     }
 
     return { people: allPeople, totalFound };

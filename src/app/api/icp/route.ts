@@ -32,6 +32,7 @@ export async function POST(request: Request) {
       employeeRanges: body.employeeRanges || [],
       jobTitles: body.jobTitles || [],
       industries: body.industries || [],
+      excludeIndustries: body.excludeIndustries || [],
       keywords: body.keywords || [],
       excludeKeywords: body.excludeKeywords || [],
       scoringCriteria: body.scoringCriteria || null,

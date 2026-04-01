@@ -16,6 +16,7 @@ type CopywriterInput = {
   serviceContext: string | null;
   toneGuide: string | null;
   stepNumber: number;
+  stepType: string; // "email" | "linkedin_connect" | "linkedin_message"
   stepTemplate: string;
   subjectTemplate: string | null;
   previousStepsSent: string[];
@@ -35,18 +36,34 @@ type CopywriterOutput = {
 
 const LATAM_COUNTRIES = ["Argentina", "Uruguay", "Chile", "Ecuador", "Peru", "Panama", "Guatemala", "Costa Rica", "Mexico", "Colombia", "Brazil"];
 
-const SYSTEM_PROMPT = `Sos un copywriter experto en cold email B2B para Known Online, una consultora líder en ecommerce y transformación digital en LATAM y USA.
+const SYSTEM_PROMPT = `Sos un copywriter experto en outreach B2B para Known Online, una consultora líder en ecommerce y transformación digital en LATAM y USA.
 
-Reglas:
+Generás copy para email y LinkedIn según el tipo de paso.
+
+Reglas para EMAIL:
 - Emails cortos (máx 150 palabras), directos, sin fluff
 - Tono profesional pero cercano, no corporativo aburrido
+- El subject debe generar curiosidad sin ser clickbait
+- Para follow-ups: referenciá el email anterior brevemente, agregá nuevo valor
+- No incluyas links ni adjuntos en el primer email
+
+Reglas para LINKEDIN CONNECTION (nota de conexión):
+- Máximo 300 caracteres (límite de LinkedIn)
+- Super conciso: una razón clara de por qué conectar
+- No vendas nada, solo generá interés
+- Mencioná algo específico de la persona o empresa
+
+Reglas para LINKEDIN MESSAGE:
+- Máximo 500 caracteres
+- Más informal que email, tono de chat profesional
+- Directo al punto, una pregunta o propuesta clara
+
+Reglas generales:
 - Personalización real basada en el research de la empresa
 - Si hay casos de éxito relevantes, mencioná uno brevemente como social proof
-- No uses frases genéricas como "espero que estés bien" o "me gustaría presentarme"
-- El subject debe generar curiosidad sin ser clickbait
+- No uses frases genéricas como "espero que estés bien"
 - Firmá como "El equipo de Known Online" (no inventar nombres)
 - Si el lead es de LATAM, escribí en español. Si es de USA, en inglés.
-- Para follow-ups: referenciá el email anterior brevemente, agregá nuevo valor
 - No incluyas links ni adjuntos en el primer email
 - CTA claro: una sola pregunta o propuesta al final`;
 
@@ -71,7 +88,11 @@ export async function generateEmail(
     }
   }
 
-  const userPrompt = `Generá el email ${input.stepNumber} de la secuencia "${input.sequenceName}".
+  const typeLabel = input.stepType === "linkedin_connect" ? "nota de conexión LinkedIn"
+    : input.stepType === "linkedin_message" ? "mensaje de LinkedIn"
+    : "email";
+
+  const userPrompt = `Generá ${typeLabel} (paso ${input.stepNumber}) de la secuencia "${input.sequenceName}".
 
 **Idioma:** ${language}
 

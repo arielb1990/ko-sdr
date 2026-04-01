@@ -16,7 +16,12 @@ export async function GET(request: Request) {
     organizationId: session.user.organizationId,
   };
 
-  if (status) where.status = status;
+  if (status) {
+    where.status = status;
+  } else {
+    // By default hide disqualified and rejected leads
+    where.status = { notIn: ["DISQUALIFIED", "REJECTED"] };
+  }
 
   if (search) {
     where.OR = [

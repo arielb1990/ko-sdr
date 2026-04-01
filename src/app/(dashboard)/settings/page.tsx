@@ -12,9 +12,14 @@ type OrgSettings = {
   icommSmtpPass: string;
   anthropicApiKey: string;
   emailDomain: string;
+  phantombusterApiKey: string;
+  phantombusterConnectAgentId: string;
+  phantombusterMessageAgentId: string;
   requireLeadApproval: boolean;
   requireMessageApproval: boolean;
   autoApproveThreshold: number | null;
+  maxLeadsPerRun: number;
+  gmailAccounts: Array<{ id: string; email: string; isActive: boolean }>;
 };
 
 export default function SettingsPage() {
@@ -24,8 +29,12 @@ export default function SettingsPage() {
 
   useEffect(() => {
     fetch("/api/settings")
-      .then((r) => r.json())
-      .then(setSettings);
+      .then((r) => {
+        if (!r.ok) throw new Error("Failed to load settings");
+        return r.json();
+      })
+      .then(setSettings)
+      .catch(() => {});
   }, []);
 
   async function handleSave(e: React.FormEvent) {
@@ -78,39 +87,61 @@ export default function SettingsPage() {
           />
         </Section>
 
-        <Section title="ICOMM (Email)">
+        <Section title="Gmail (Email Outreach)">
+          <div>
+            <p className="text-sm text-muted-foreground mb-3">
+              Conectá cuentas de Google Workspace para enviar emails directamente desde Gmail.
+              Los emails se ven naturales y aparecen en la bandeja de enviados.
+            </p>
+            <div className="space-y-2 mb-3">
+              {(settings.gmailAccounts || []).map((acc) => (
+                <div
+                  key={acc.id}
+                  className="flex items-center justify-between rounded border border-border p-2 text-sm"
+                >
+                  <span className="font-mono text-xs">{acc.email}</span>
+                  <span
+                    className={`rounded px-2 py-0.5 text-xs ${
+                      acc.isActive
+                        ? "bg-green-100 text-green-700"
+                        : "bg-gray-100 text-gray-500"
+                    }`}
+                  >
+                    {acc.isActive ? "Conectada" : "Inactiva"}
+                  </span>
+                </div>
+              ))}
+              {(settings.gmailAccounts || []).length === 0 && (
+                <p className="text-xs text-muted-foreground">No hay cuentas conectadas.</p>
+              )}
+            </div>
+            <a
+              href="/api/auth/gmail"
+              className="inline-flex items-center gap-2 rounded bg-foreground px-3 py-2 text-sm font-medium text-background hover:bg-foreground/90"
+            >
+              + Conectar cuenta de Gmail
+            </a>
+          </div>
+        </Section>
+
+        <Section title="PhantomBuster (LinkedIn)">
           <Field
             label="API Key"
             type="password"
-            value={settings.icommApiKey}
-            onChange={(v) => setSettings({ ...settings, icommApiKey: v })}
+            value={settings.phantombusterApiKey}
+            onChange={(v) => setSettings({ ...settings, phantombusterApiKey: v })}
           />
           <Field
-            label="SMTP Host"
-            value={settings.icommSmtpHost}
-            onChange={(v) => setSettings({ ...settings, icommSmtpHost: v })}
+            label="Agent ID - LinkedIn Auto Connect"
+            value={settings.phantombusterConnectAgentId}
+            onChange={(v) => setSettings({ ...settings, phantombusterConnectAgentId: v })}
+            placeholder="ID del Phantom de conexión"
           />
           <Field
-            label="SMTP Port"
-            value={settings.icommSmtpPort}
-            onChange={(v) => setSettings({ ...settings, icommSmtpPort: v })}
-          />
-          <Field
-            label="SMTP User"
-            value={settings.icommSmtpUser}
-            onChange={(v) => setSettings({ ...settings, icommSmtpUser: v })}
-          />
-          <Field
-            label="SMTP Password"
-            type="password"
-            value={settings.icommSmtpPass}
-            onChange={(v) => setSettings({ ...settings, icommSmtpPass: v })}
-          />
-          <Field
-            label="Dominio de envío"
-            value={settings.emailDomain}
-            onChange={(v) => setSettings({ ...settings, emailDomain: v })}
-            placeholder="outreach-ko.com"
+            label="Agent ID - LinkedIn Message Sender"
+            value={settings.phantombusterMessageAgentId}
+            onChange={(v) => setSettings({ ...settings, phantombusterMessageAgentId: v })}
+            placeholder="ID del Phantom de mensajes"
           />
         </Section>
 
@@ -121,6 +152,33 @@ export default function SettingsPage() {
             value={settings.anthropicApiKey}
             onChange={(v) => setSettings({ ...settings, anthropicApiKey: v })}
           />
+        </Section>
+
+        <Section title="Discovery">
+          <div>
+            <label className="block text-sm font-medium text-foreground">
+              Máximo de leads a enriquecer por Discovery Run
+            </label>
+            <div className="mt-1 flex items-center gap-3">
+              <input
+                type="number"
+                min={1}
+                max={500}
+                value={settings.maxLeadsPerRun}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    maxLeadsPerRun: parseInt(e.target.value) || 10,
+                  })
+                }
+                className="w-24 rounded border border-border px-3 py-2 text-sm focus:border-accent focus:outline-none"
+              />
+              <span className="text-sm text-muted-foreground">leads</span>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Cada lead enriquecido consume 1 crédito de Apollo. Usar valores bajos para testing.
+            </p>
+          </div>
         </Section>
 
         <Section title="Aprobación">

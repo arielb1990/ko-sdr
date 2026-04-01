@@ -222,11 +222,11 @@ function SequenceForm({
   const [serviceContext, setServiceContext] = useState("");
   const [toneGuide, setToneGuide] = useState("");
   const [steps, setSteps] = useState([
-    { subjectTemplate: "", bodyTemplate: "", delayDays: 0 },
+    { stepType: "email", subjectTemplate: "", bodyTemplate: "", delayDays: 0 },
   ]);
 
   function addStep() {
-    setSteps([...steps, { subjectTemplate: "", bodyTemplate: "", delayDays: 3 }]);
+    setSteps([...steps, { stepType: "email", subjectTemplate: "", bodyTemplate: "", delayDays: 3 }]);
   }
 
   function updateStep(index: number, field: string, value: string | number) {
@@ -307,9 +307,20 @@ function SequenceForm({
             {steps.map((step, i) => (
               <div key={i} className="rounded border border-border p-3">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-medium text-muted-foreground">
-                    Paso {i + 1}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-muted-foreground">
+                      Paso {i + 1}
+                    </span>
+                    <select
+                      value={step.stepType || "email"}
+                      onChange={(e) => updateStep(i, "stepType", e.target.value)}
+                      className="rounded border border-border px-2 py-0.5 text-xs"
+                    >
+                      <option value="email">Email</option>
+                      <option value="linkedin_connect">LinkedIn - Conexión</option>
+                      <option value="linkedin_message">LinkedIn - Mensaje</option>
+                    </select>
+                  </div>
                   <div className="flex items-center gap-2">
                     <label className="text-xs text-muted-foreground">
                       Delay:
@@ -334,19 +345,32 @@ function SequenceForm({
                     )}
                   </div>
                 </div>
-                <input
-                  value={step.subjectTemplate}
-                  onChange={(e) => updateStep(i, "subjectTemplate", e.target.value)}
-                  className="block w-full rounded border border-border px-3 py-1.5 text-sm focus:border-accent focus:outline-none mb-2"
-                  placeholder="Subject template (IA personaliza)"
-                />
+                {(step.stepType || "email") === "email" && (
+                  <input
+                    value={step.subjectTemplate}
+                    onChange={(e) => updateStep(i, "subjectTemplate", e.target.value)}
+                    className="block w-full rounded border border-border px-3 py-1.5 text-sm focus:border-accent focus:outline-none mb-2"
+                    placeholder="Subject template (IA personaliza)"
+                  />
+                )}
                 <textarea
                   value={step.bodyTemplate}
                   onChange={(e) => updateStep(i, "bodyTemplate", e.target.value)}
-                  rows={3}
+                  rows={step.stepType === "linkedin_connect" ? 2 : 3}
                   className="block w-full rounded border border-border px-3 py-1.5 text-sm focus:border-accent focus:outline-none"
-                  placeholder="Body template (IA personaliza basándose en el research del lead)"
+                  placeholder={
+                    step.stepType === "linkedin_connect"
+                      ? "Nota de conexión (máx 300 chars, IA personaliza)"
+                      : step.stepType === "linkedin_message"
+                        ? "Mensaje de LinkedIn (IA personaliza)"
+                        : "Body del email (IA personaliza basándose en el research)"
+                  }
                 />
+                {step.stepType === "linkedin_connect" && (
+                  <p className="mt-1 text-[10px] text-muted-foreground">
+                    {(step.bodyTemplate || "").length}/300 caracteres
+                  </p>
+                )}
               </div>
             ))}
           </div>
