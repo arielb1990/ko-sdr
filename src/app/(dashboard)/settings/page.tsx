@@ -235,6 +235,8 @@ export default function SettingsPage() {
           </div>
         </Section>
 
+        <ChangePasswordSection />
+
         {message && (
           <p className={`text-sm ${message.includes("Error") ? "text-red-600" : "text-green-600"}`}>
             {message}
@@ -322,5 +324,71 @@ function Toggle({
         <p className="text-xs text-muted-foreground">{description}</p>
       </div>
     </div>
+  );
+}
+
+function ChangePasswordSection() {
+  const [current, setCurrent] = useState("");
+  const [newPwd, setNewPwd] = useState("");
+  const [status, setStatus] = useState<{ msg: string; ok: boolean } | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  async function handleChange(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setStatus(null);
+
+    const res = await fetch("/api/auth/change-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ currentPassword: current, newPassword: newPwd }),
+    });
+
+    const data = await res.json();
+    if (res.ok) {
+      setStatus({ msg: "Contraseña actualizada", ok: true });
+      setCurrent("");
+      setNewPwd("");
+    } else {
+      setStatus({ msg: data.error, ok: false });
+    }
+    setSaving(false);
+  }
+
+  return (
+    <Section title="Cambiar contraseña">
+      <form onSubmit={handleChange} className="space-y-3">
+        <div>
+          <label className="block text-sm font-medium text-foreground">Contraseña actual</label>
+          <input
+            type="password"
+            value={current}
+            onChange={(e) => setCurrent(e.target.value)}
+            className="mt-1 block w-full max-w-sm rounded border border-border px-3 py-2 text-sm focus:border-accent focus:outline-none"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-foreground">Nueva contraseña</label>
+          <input
+            type="password"
+            value={newPwd}
+            onChange={(e) => setNewPwd(e.target.value)}
+            className="mt-1 block w-full max-w-sm rounded border border-border px-3 py-2 text-sm focus:border-accent focus:outline-none"
+          />
+        </div>
+        {status && (
+          <p className={`text-sm ${status.ok ? "text-green-600" : "text-red-600"}`}>
+            {status.msg}
+          </p>
+        )}
+        <button
+          type="submit"
+          disabled={saving || !current || !newPwd}
+          className="rounded bg-foreground px-4 py-2 text-sm font-medium text-background hover:bg-foreground/90 disabled:opacity-50"
+        >
+          {saving ? "Guardando..." : "Cambiar contraseña"}
+        </button>
+      </form>
+    </Section>
   );
 }
